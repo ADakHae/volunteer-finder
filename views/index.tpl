@@ -1,5 +1,17 @@
 % rebase('base.tpl', page_title='봉사활동 찾기', nav='search')
 
+<section class="sync-section">
+    <div class="sync-info">
+        <span>저장된 활동: <strong id="syncCount">{{sync_stats['count']}}</strong>건</span>
+        % if sync_stats['last_sync']:
+        <span class="sync-time">마지막 동기화: {{sync_stats['last_sync'][:16].replace('T', ' ')}}</span>
+        % else:
+        <span class="sync-time">아직 동기화하지 않았습니다</span>
+        % end
+    </div>
+    <button id="syncBtn" class="btn btn-primary">동기화</button>
+</section>
+
 <section class="ai-search-section">
     <form action="/api/ai-search" method="post" class="ai-search-form">
         <label for="ai-query">AI 추천 검색</label>
@@ -161,7 +173,10 @@
 
     % if total > 10:
     <div class="pagination">
-        % pages = (total + 9) // 10
+        <%
+        per_page = 10
+        pages = (total + per_page - 1) // per_page
+        %>
         % current = page
         % import urllib.parse as _up
         <%

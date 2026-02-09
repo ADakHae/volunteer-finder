@@ -358,6 +358,55 @@ def search(region="", district="", category="", activity_type="",
     return {"items": activities, "total": total, "page": page}
 
 
+def sync_filtered(region="", district="", category="", activity_type="",
+                   target="", status="0", date_start="", date_end="",
+                   keyword="", progress_callback=None):
+    """필터링된 검색 결과의 모든 페이지를 가져온다.
+    3개 스레드로 병렬 요청. progress_callback(page, total_pages, fetched)가 호출된다.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from categorizer import compute_group_key
+    from datetime import datetime as _dt
+
+    # 첫 페이지: total_pages 파악용 (순차)
+    result = search(region=region, district=district, category=category,
+                    activity_type=activity_type, target=target, status=status,
+                    date_start=date_start, date_end=date_end, keyword=keyword, page=1)
+    total = result["total"]
+    total_pages = (total + 9) // 10
+
+    now = _dt.now().isoformat()
+    all_items = []
+
+    for item in result["items"]:
+        item["group_key"] = compute_group_key(item["title"])
+        item["fetched_at"] = now
+    all_items.extend(result["items"])
+
+    if progress_callback:
+        progress_callback(1, total_pages, len(all_items))
+
+    # 나머지 페이지: 3개 스레드로 병렬 요청
+    if total_pages > 1:
+        def fetch_one(pg):
+            return pg, search(region=region, district=district, category=category,
+                              activity_type=activity_type, target=target, status=status,
+                              date_start=date_start, date_end=date_end, keyword=keyword, page=pg)
+
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            futures = {executor.submit(fetch_one, pg): pg for pg in range(2, total_pages + 1)}
+            for future in as_completed(futures):
+                pg, res = future.result()
+                for item in res["items"]:
+                    item["group_key"] = compute_group_key(item["title"])
+                    item["fetched_at"] = now
+                all_items.extend(res["items"])
+                if progress_callback:
+                    progress_callback(pg, total_pages, len(all_items))
+
+    return {"items": all_items, "total": total, "pages": total_pages}
+
+
 if __name__ == "__main__":
     import json
     result = search(region="6110000", district="3160000", category="0700",

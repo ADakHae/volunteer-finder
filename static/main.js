@@ -31,6 +31,58 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     }
 
+    // 동기화 버튼
+    var syncBtn = document.getElementById("syncBtn");
+    if (syncBtn) {
+        syncBtn.addEventListener("click", function () {
+            syncBtn.disabled = true;
+            syncBtn.textContent = "동기화 중...";
+
+            // 현재 필터 폼의 값을 수집
+            var filterForm = document.querySelector(".filter-form");
+            var body = filterForm ? new URLSearchParams(new FormData(filterForm)).toString() : "";
+
+            fetch("/api/sync", {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: body,
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.error) {
+                        alert(data.error);
+                        syncBtn.disabled = false;
+                        syncBtn.textContent = "동기화";
+                        return;
+                    }
+                    pollSync();
+                });
+        });
+
+        function pollSync() {
+            fetch("/api/sync-status")
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.running) {
+                        var progress = data.total_pages
+                            ? Math.round(data.page / data.total_pages * 100)
+                            : 0;
+                        syncBtn.textContent = "동기화 중... " + progress + "%";
+                        var countEl = document.getElementById("syncCount");
+                        if (countEl) countEl.textContent = data.fetched;
+                        setTimeout(pollSync, 2000);
+                    } else if (data.error) {
+                        alert("동기화 오류: " + data.error);
+                        syncBtn.disabled = false;
+                        syncBtn.textContent = "동기화";
+                    } else {
+                        syncBtn.textContent = data.fetched + "건 완료!";
+                        setTimeout(function () { location.reload(); }, 1000);
+                    }
+                });
+        }
+    }
+
     // 저장 버튼
     var saveBtn = document.getElementById("saveBtn");
     if (saveBtn) {

@@ -80,8 +80,9 @@ def init_db(conn):
 
 
 def upsert_activities(conn, activities):
+    """동기화: 없는 활동만 추가 (기존 데이터 보존)."""
     conn.executemany("""
-        INSERT OR REPLACE INTO activities
+        INSERT OR IGNORE INTO activities
             (program_id, title, location, organization, category,
              activity_type, recruit_status, recognized_hours,
              period_start, period_end, volunteer_time,
@@ -128,6 +129,60 @@ def get_activities(conn, filters=None, page=1, per_page=20):
     ).fetchall()
 
     return {"items": [dict(r) for r in rows], "total": count, "page": page, "per_page": per_page}
+
+
+def search_activities(conn, filters, page=1, per_page=10):
+    """로컬 DB에서 필터 기반 검색."""
+    where = []
+    params = []
+
+    if filters.get("keyword"):
+        where.append("(title LIKE ? OR organization LIKE ?)")
+        kw = f"%{filters['keyword']}%"
+        params.extend([kw, kw])
+    if filters.get("category"):
+        where.append("category LIKE ?")
+        params.append(f"%{filters['category']}%")
+    if filters.get("activity_type"):
+        where.append("activity_type LIKE ?")
+        params.append(f"%{filters['activity_type']}%")
+    if filters.get("recruit_status"):
+        where.append("recruit_status = ?")
+        params.append(filters["recruit_status"])
+    if filters.get("target"):
+        where.append("target LIKE ?")
+        params.append(f"%{filters['target']}%")
+    if filters.get("location"):
+        where.append("location LIKE ?")
+        params.append(f"%{filters['location']}%")
+    if filters.get("date_start"):
+        where.append("period_end >= ?")
+        params.append(filters["date_start"])
+    if filters.get("date_end"):
+        where.append("period_start <= ?")
+        params.append(filters["date_end"])
+
+    where_clause = " WHERE " + " AND ".join(where) if where else ""
+    offset = (page - 1) * per_page
+
+    count = conn.execute(
+        f"SELECT COUNT(*) FROM activities{where_clause}", params
+    ).fetchone()[0]
+
+    rows = conn.execute(
+        f"SELECT * FROM activities{where_clause} ORDER BY period_start DESC LIMIT ? OFFSET ?",
+        params + [per_page, offset]
+    ).fetchall()
+
+    return {"items": [dict(r) for r in rows], "total": count, "page": page}
+
+
+def get_sync_stats(conn):
+    """동기화 통계: 총 활동 수, 마지막 동기화 시간."""
+    count = conn.execute("SELECT COUNT(*) FROM activities").fetchone()[0]
+    row = conn.execute("SELECT MAX(fetched_at) FROM activities").fetchone()
+    last_sync = row[0] if row[0] else None
+    return {"count": count, "last_sync": last_sync}
 
 
 def get_activity(conn, program_id):
