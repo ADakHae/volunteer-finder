@@ -224,6 +224,19 @@ main {
 .info-table th { text-align: left; padding: 8px 12px; background: #f8fafc; font-size: 13px; color: var(--text-secondary); width: 100px; border: 1px solid var(--border); }
 .info-table td { padding: 8px 12px; font-size: 14px; border: 1px solid var(--border); }
 
+/* Description */
+.detail-description { margin-bottom: 24px; }
+.detail-description h3 { font-size: 16px; margin-bottom: 10px; }
+.description-content {
+    background: #f8fafc;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px;
+    font-size: 14px;
+    line-height: 1.8;
+    white-space: pre-wrap;
+}
+
 /* Related */
 .related-section { margin-bottom: 24px; }
 .related-section h3 { font-size: 16px; margin-bottom: 10px; }

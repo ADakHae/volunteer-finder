@@ -20,15 +20,40 @@
 
     <div class="detail-info">
         <table class="info-table">
-            <tr><th>위치</th><td>{{activity['location']}}</td></tr>
-            <tr><th>활동기관</th><td>{{activity['organization']}}</td></tr>
             <tr><th>봉사기간</th><td>{{activity['period_start']}} ~ {{activity['period_end']}}</td></tr>
             <tr><th>봉사시간</th><td>{{activity['volunteer_time']}}</td></tr>
-            <tr><th>모집기간</th><td>{{activity['recruit_start']}} ~ {{activity['recruit_end']}}</td></tr>
             <tr><th>인정시간</th><td>{{activity['recognized_hours']}}</td></tr>
+            <tr><th>모집기간</th><td>{{activity['recruit_start']}} ~ {{activity['recruit_end']}}</td></tr>
+            % if activity.get('active_days'):
+            <tr><th>활동요일</th><td>{{activity['active_days']}}</td></tr>
+            % end
+            % if activity.get('recruit_count'):
+            <tr><th>모집인원</th><td>{{activity['recruit_count']}}</td></tr>
+            % end
+            % if activity.get('apply_count'):
+            <tr><th>신청인원</th><td>{{activity['apply_count']}}</td></tr>
+            % end
+            <tr><th>봉사장소</th><td>{{activity['location']}}</td></tr>
+            <tr><th>활동기관</th><td>{{activity['organization']}}</td></tr>
+            % if activity.get('register_org'):
+            <tr><th>등록기관</th><td>{{activity['register_org']}}</td></tr>
+            % end
             <tr><th>분야</th><td>{{activity['category']}}</td></tr>
+            % if activity.get('target'):
+            <tr><th>봉사대상</th><td>{{activity['target']}}</td></tr>
+            % end
+            % if activity.get('volunteer_type'):
+            <tr><th>봉사자유형</th><td>{{activity['volunteer_type']}}</td></tr>
+            % end
         </table>
     </div>
+
+    % if activity.get('description'):
+    <div class="detail-description">
+        <h3>활동 상세</h3>
+        <div class="description-content">{{activity['description']}}</div>
+    </div>
+    % end
 
     % if related:
     <div class="related-section">

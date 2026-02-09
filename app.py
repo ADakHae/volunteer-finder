@@ -110,20 +110,30 @@ def search_page():
 
 @app.route("/activity/<program_id>")
 def activity_detail(program_id):
+    # DB에 없으면 빈 레코드 생성
+    now = datetime.now().isoformat()
+    db.ensure_activity_exists(conn, program_id, now)
+
+    # 상세 정보를 아직 안 가져왔으면 API 호출
     activity = db.get_activity(conn, program_id)
-    if not activity:
-        return template("detail", activity=None, reviews=[], stats=None, saved=False,
-                         related=[], error="활동 정보를 찾을 수 없습니다.")
+    error = None
+    if not activity.get("detail_fetched"):
+        try:
+            detail = scraper.fetch_detail(program_id)
+            if detail:
+                db.update_activity_detail(conn, detail)
+                activity = db.get_activity(conn, program_id)
+        except Exception as e:
+            error = f"상세 정보 조회 중 오류: {e}"
 
     reviews = db.get_reviews(conn, program_id)
     stats = db.get_review_stats(conn, program_id)
     saved = db.is_saved(conn, program_id)
     related = db.get_grouped_activities(conn, activity["group_key"]) if activity.get("group_key") else []
-    # 자기 자신 제외
     related = [r for r in related if r["program_id"] != program_id]
 
     return template("detail", activity=activity, reviews=reviews, stats=stats,
-                     saved=saved, related=related, error=None)
+                     saved=saved, related=related, error=error)
 
 
 @app.route("/saved")

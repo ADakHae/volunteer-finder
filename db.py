@@ -30,7 +30,15 @@ def init_db(conn):
             recruit_start   TEXT,
             recruit_end     TEXT,
             group_key       TEXT,
-            fetched_at      TEXT NOT NULL
+            fetched_at      TEXT NOT NULL,
+            description     TEXT,
+            recruit_count   TEXT,
+            apply_count     TEXT,
+            target          TEXT,
+            active_days     TEXT,
+            volunteer_type  TEXT,
+            register_org    TEXT,
+            detail_fetched  INTEGER DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS reviews (
@@ -54,6 +62,21 @@ def init_db(conn):
         CREATE INDEX IF NOT EXISTS idx_activities_group_key ON activities(group_key);
         CREATE INDEX IF NOT EXISTS idx_reviews_program_id ON reviews(program_id);
     """)
+    # 기존 DB 마이그레이션: 새 컬럼 추가
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(activities)").fetchall()}
+    new_cols = [
+        ("description", "TEXT"),
+        ("recruit_count", "TEXT"),
+        ("apply_count", "TEXT"),
+        ("target", "TEXT"),
+        ("active_days", "TEXT"),
+        ("volunteer_type", "TEXT"),
+        ("register_org", "TEXT"),
+        ("detail_fetched", "INTEGER DEFAULT 0"),
+    ]
+    for col_name, col_type in new_cols:
+        if col_name not in existing:
+            conn.execute(f"ALTER TABLE activities ADD COLUMN {col_name} {col_type}")
 
 
 def upsert_activities(conn, activities):
@@ -112,6 +135,45 @@ def get_activity(conn, program_id):
         "SELECT * FROM activities WHERE program_id = ?", (program_id,)
     ).fetchone()
     return dict(row) if row else None
+
+
+def update_activity_detail(conn, detail):
+    """상세 페이지에서 가져온 정보로 활동 업데이트."""
+    conn.execute("""
+        UPDATE activities SET
+            description = ?, recruit_count = ?, apply_count = ?,
+            target = ?, active_days = ?, volunteer_type = ?,
+            register_org = ?, location = ?, organization = ?,
+            recruit_status = ?, volunteer_time = ?, recognized_hours = ?,
+            period_start = ?, period_end = ?, recruit_start = ?, recruit_end = ?,
+            category = ?, activity_type = ?, detail_fetched = 1
+        WHERE program_id = ?
+    """, (
+        detail.get("description", ""), detail.get("recruit_count", ""),
+        detail.get("apply_count", ""), detail.get("target", ""),
+        detail.get("active_days", ""), detail.get("volunteer_type", ""),
+        detail.get("register_org", ""), detail.get("location", ""),
+        detail.get("organization", ""), detail.get("recruit_status", ""),
+        detail.get("volunteer_time", ""), detail.get("recognized_hours", ""),
+        detail.get("period_start", ""), detail.get("period_end", ""),
+        detail.get("recruit_start", ""), detail.get("recruit_end", ""),
+        detail.get("category", ""), detail.get("activity_type", ""),
+        detail["program_id"],
+    ))
+    conn.commit()
+
+
+def ensure_activity_exists(conn, program_id, fetched_at):
+    """목록에서 클릭했지만 DB에 없을 경우 빈 레코드 생성."""
+    existing = conn.execute(
+        "SELECT program_id FROM activities WHERE program_id = ?", (program_id,)
+    ).fetchone()
+    if not existing:
+        conn.execute(
+            "INSERT INTO activities (program_id, title, fetched_at) VALUES (?, '', ?)",
+            (program_id, fetched_at)
+        )
+        conn.commit()
 
 
 def get_reviews(conn, program_id):

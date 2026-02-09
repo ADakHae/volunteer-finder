@@ -10,7 +10,8 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-# 2. 서버 실행
+# 2. 서버 실행 (venv 활성화 후)
+source venv/bin/activate
 python3 app.py
 ```
 

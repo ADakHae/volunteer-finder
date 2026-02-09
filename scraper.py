@@ -222,6 +222,131 @@ def fetch_districts(city_code):
     return {item["code"]: item["codeNm"] for item in result.get("list", [])}
 
 
+def fetch_detail(program_id):
+    """상세 페이지 HTML을 가져와 파싱한다."""
+    url = API_URL + "?" + urllib.parse.urlencode({
+        "type": "show",
+        "progrmRegistNo": program_id,
+    })
+    params = {
+        "cPage": "1",
+        "actType": "A01",
+        "searchSrvcStts": "0",
+        "adultPosblAt": "Y",
+        "yngbgsPosblAt": "Y",
+        "searchFlag": "search",
+        "progrmRegistNo": program_id,
+    }
+    data = urllib.parse.urlencode(params).encode("utf-8")
+    req = urllib.request.Request(url, data=data, headers={
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+    })
+    ctx = ssl.create_default_context()
+    with urllib.request.urlopen(req, timeout=20, context=ctx) as resp:
+        html = resp.read().decode("utf-8")
+    return parse_detail(html, program_id)
+
+
+def parse_detail(html, program_id):
+    """상세 페이지 HTML에서 봉사활동 정보를 추출한다."""
+    soup = BeautifulSoup(html, "html.parser")
+
+    board_view = soup.select_one("div.board_view")
+    if not board_view:
+        return None
+
+    item = {"program_id": program_id}
+
+    # 제목 + 모집상태
+    tit = board_view.select_one("h3.tit_board_view")
+    if tit:
+        full = tit.get_text(strip=True)
+        m = re.search(r"\(([^)]+)\)\s*$", full)
+        if m:
+            item["recruit_status"] = m.group(1)
+            item["title"] = full[:m.start()].strip()
+        else:
+            item["title"] = full
+            item["recruit_status"] = ""
+    else:
+        item["title"] = ""
+        item["recruit_status"] = ""
+
+    # dl > dt + dd 쌍 파싱
+    data_show = board_view.select_one("div.board_data_show")
+    fields = {}
+    if data_show:
+        for dl in data_show.select("dl"):
+            dt = dl.find("dt")
+            dd = dl.find("dd")
+            if dt and dd:
+                fields[dt.get_text(strip=True)] = dd
+
+    # 봉사기간
+    period_dd = fields.get("봉사기간")
+    if period_dd:
+        dates = re.findall(r"(\d{4}\.\d{2}\.\d{2})", period_dd.get_text())
+        item["period_start"] = dates[0].replace(".", "-") if len(dates) >= 1 else ""
+        item["period_end"] = dates[1].replace(".", "-") if len(dates) >= 2 else ""
+    else:
+        item["period_start"] = ""
+        item["period_end"] = ""
+
+    # 봉사시간
+    time_dd = fields.get("봉사시간")
+    item["volunteer_time"] = re.sub(r"\s+", " ", time_dd.get_text(strip=True)) if time_dd else ""
+
+    # 모집기간
+    recruit_dd = fields.get("모집기간")
+    if recruit_dd:
+        dates = re.findall(r"(\d{4}\.\d{2}\.\d{2})", recruit_dd.get_text())
+        item["recruit_start"] = dates[0].replace(".", "-") if len(dates) >= 1 else ""
+        item["recruit_end"] = dates[1].replace(".", "-") if len(dates) >= 2 else ""
+    else:
+        item["recruit_start"] = ""
+        item["recruit_end"] = ""
+
+    # 단순 텍스트 필드들
+    for key, label in [
+        ("active_days", "활동요일"),
+        ("recruit_count", "모집인원"),
+        ("apply_count", "신청인원"),
+        ("category", "봉사분야"),
+        ("volunteer_type", "봉사자유형"),
+        ("target", "봉사대상"),
+        ("activity_type", "활동구분"),
+    ]:
+        dd = fields.get(label)
+        item[key] = re.sub(r"\s+", " ", dd.get_text(strip=True)) if dd else ""
+
+    # 모집기관 (span.text-l 에 이름)
+    org_dd = fields.get("모집기관")
+    if org_dd:
+        span = org_dd.select_one("span.text-l")
+        item["organization"] = span.get_text(strip=True) if span else org_dd.get_text(strip=True)
+    else:
+        item["organization"] = ""
+
+    # 등록기관
+    reg_dd = fields.get("등록기관")
+    item["register_org"] = reg_dd.get_text(strip=True) if reg_dd else ""
+
+    # 봉사장소
+    place_dd = fields.get("봉사장소")
+    item["location"] = place_dd.get_text(strip=True) if place_dd else ""
+
+    # 인정시간 (봉사시간 텍스트에서 추출)
+    hours_match = re.search(r"최대\s*(\d+)시간\s*인정", item.get("volunteer_time", ""))
+    item["recognized_hours"] = f"{hours_match.group(1)}시간" if hours_match else ""
+
+    # 활동 설명
+    board_body = board_view.select_one("div.board_body")
+    item["description"] = board_body.get_text(strip=True) if board_body else ""
+
+    return item
+
+
 def search(region="", district="", category="", activity_type="",
            target="", status="0", date_start="", date_end="",
            keyword="", page=1):
